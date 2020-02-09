@@ -118,7 +118,7 @@ void client_c::slotDisconnected()
 void client_c::customEvent(QEvent *event)
 {
     txEvt_c *txevt;
-    QDataStream out(&buf, QIODevice::WriteOnly);
+    //QDataStream out(&buf, QIODevice::WriteOnly);
     mailHeader_c *h;
     std::ostringstream oss;
 
@@ -140,14 +140,31 @@ void client_c::customEvent(QEvent *event)
             switch(txevt->Msgtype())
             {
                 case mailHeader_c::msgType_t::MSG_TYPE_TEXT:
+                    // добавляем payload
                     buf.append(txevt->Msg().c_str(), static_cast<int>(txevt->Msg().length()));
-                    h->Size = static_cast<quint32>(buf.size());
+
+                    // адрес данных в куче мог измениться после перераспределения, так что переопределить h
+                    h = reinterpret_cast<mailHeader_c*>(buf.data());
+
+                    // установить размер
+                    h->Size = buf.size();
+
+                    TRACE(oss);
                     emit sigTxMsg();
                     break;
 
                 case mailHeader_c::msgType_t::MSG_TYPE_IMAGE:
+                    // добавляем payload
                     buf.append(txevt->Imagebytes());
-                    h->Size = static_cast<quint32>(buf.size());
+
+                    // адрес данных в куче мог измениться после перераспределения, так что переопределить h
+                    h = reinterpret_cast<mailHeader_c*>(buf.data());
+
+                    // установить размер
+                    h->Size = buf.size();
+                    oss << "set sizeof mail = " << h->Size;
+
+                    TRACE(oss);
                     emit sigTxImg();
                     break;
             }
@@ -161,6 +178,11 @@ void client_c::slotTxMsg()
 {
     qint64 err;
     QEvent *evt;
+    std::ostringstream oss;
+    std::uint32_t *p = (std::uint32_t*)buf.data();
+
+    oss << "mail size = " << *p ;
+    TRACE(oss);
 
     // отправить посылку в сокет
     err = tcpSocket->write(buf);
